@@ -5,6 +5,28 @@
 **定位铁律:本平台是【证伪器】,不是保证书。** 它能高置信地说"不能实盘"
 (被某道门证伪);最强正向结论只是"未被任何已知测试证伪",永不承诺盈利。
 
+## 🚀 60 秒快速开始
+
+```bash
+pip install quantros          # 装(Python 3.9+)
+quantros                      # 看漏斗指南:你有什么,就走哪条路
+```
+
+**聚宽用户**(策略文件一行不用改):
+```bash
+JQ_USER=手机号 JQ_PASS=密码 quantros jq 我的策略.py \
+    --data 510300.XSHG --start 2023-01-01 --end 2025-12-31 \
+    --grid "fast=5,10;slow=20,40,60"     # ← 必须写全部试过的参数,少报=骗自己
+```
+→ 自动:拉数据(缓存,聚宽额度只花一次)→ 时点化沙箱重放 → 五门判决 → HTML 报告。
+基本面选股类(get_fundamentals)见 `examples/run_graham_real.py`;分钟频暂不支持。
+
+**其它任何框架**(backtrader/vnpy/真格/QMT/Excel,不交代码):
+```bash
+quantros gate returns.csv --n-trials 50 --html report.html
+```
+CSV 三列 `combo,date,ret`(或 equity 净值),导出教程见 `EXPORT.md`。单条曲线也收。
+
 ## 产品架构:通用层当门 + 时点化沙箱当核 + 五门判决
 
 ```
@@ -43,10 +65,11 @@
 
 ## 安装与运行
 ```bash
-pip install -e .              # 安装(可 pip install -e ".[data]" 带 akshare 真实数据)
-quantros                      # ★ 统一入口:漏斗指南(你有什么 → 走哪条路)
-pytest -q                     # 应全绿
-python -m quantros.demo       # 看现场拦截演示
+pip install quantros              # 普通用户(PyPI)
+pip install "quantros[data]"      # 带 akshare 真实行情
+# 开发者:克隆本仓库后 pip install -e . && pytest -q(应全绿)
+python -m quantros.demo           # 看现场拦截演示
+quantros-check                    # 真实股指期货端到端自检(需联网)
 ```
 
 聚宽用户一条命令(取数缓存 → 零改写沙箱 → ②③ → 五门判决 → HTML 报告):
