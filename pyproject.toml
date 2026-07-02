@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quantros"
-version = "0.2.0"
+version = "0.2.1"
 description = "策略实盘就绪度体检平台:五柱诊断(因果/过拟合/成本/容量/稳健),本地纯数学、可复现、不碰大模型"
 readme = "README.md"
 requires-python = ">=3.9"
