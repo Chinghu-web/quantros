@@ -1,0 +1,13 @@
+# 用户数据缓存(个人聚宽数据,不入库、不再分发)
+data_cache/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# 系统
+.DS_Store

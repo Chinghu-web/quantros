@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantros"
+version = "0.2.0"
+description = "策略实盘就绪度体检平台:五柱诊断(因果/过拟合/成本/容量/稳健),本地纯数学、可复现、不碰大模型"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "QuantROS" }]
+keywords = ["quant", "backtest", "overfitting", "look-ahead-bias", "pbo", "strategy-validation"]
+dependencies = [
+    "polars>=1.0",
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+data = ["akshare>=1.10"]      # 真实数据接入(可选);tushare 用户自行安装
+tushare = ["tushare>=1.2"]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+quantros = "quantros.cli:main"                          # 统一入口(guide/jq/gate/positions/check)
+quantros-check = "quantros.check:main"                  # 真实数据端到端核对
+quantros-multiconfig = "quantros.multiconfig:main"      # 中档:多配置持仓 → PBO+成本+容量
+quantros-gate = "quantros.universal:main"               # 通用层正门:收益序列 → PBO+DSR 判决
+
+[tool.setuptools]
+packages = ["quantros"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
