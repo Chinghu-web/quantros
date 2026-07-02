@@ -240,7 +240,7 @@ quantros.diagnose_outputs(positions, prices, report_sink=HTTPSink(url, api_key))
   "过去所有状态稳住 ≠ 未知状态能活";平静史上的满仓多 E3 必然放行、由 E2 拦截。
   尤其警惕卖权利金类:样本里没有 vol spike 时 E3 必然全绿,全绿 ≠ 尾部安全。
 - 迁移指南:`MIGRATION.md`(聚宽日频策略 30 分钟迁入沙箱,含逐行对照与诚实义务清单)
-- **聚宽零改写垫片 `quantros/jqcompat.py`**:实现聚宽同名 API 接沙箱底层,用户策略文件一行不改直接过五门;PIT 保证穿透垫片(自证测试);不支持的 API 大声报错点名,绝不静默假装;调度三件套 run_daily/run_weekly/run_monthly(every_bar=日频每日一次);活账户(cash/持仓随下单变化,堵杠杆叠加);`tests/test_jqcompat.py`
+- **聚宽零改写垫片 `quantros/jqcompat.py`**:实现聚宽同名 API 接沙箱底层,用户策略文件一行不改直接过五门;PIT 保证穿透垫片(自证测试);不支持的 API 大声报错点名,绝不静默假装;调度三件套 run_daily/run_weekly/run_monthly(every_bar=日频每日一次);活账户(cash/持仓随下单变化,堵杠杆叠加);下单族 order_target_value/order_target/order_value/order/**order_target_percent/order_percent**;行情族 attribute_history/history/get_bars **多字段**(close/open/high/low);`tests/test_jqcompat.py`
 
 **家族扩展 · 基本面(`quantros/fundamentals.py`)——解锁选股类策略**
 - **时点成分股**(月度快照,≤当日最近一期)+ **公告日对齐财报**(聚宽 `get_fundamentals(date=)` 原生按公告日可见)→ 物理堵死幸存者偏差与财报前视

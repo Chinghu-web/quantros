@@ -7,13 +7,17 @@ order_target_value / run_daily / handle_data / log / set_*),底层接时点化�
 因此 ①前视物理不可能 的保证自动继承,扰动自证测试同样适用。
 
 支持子集(日频,覆盖绝大多数聚宽日线策略):
-  initialize(context) / handle_data(context, data) / run_daily(func, ...)
+  initialize(context) / handle_data(context, data)
+  run_daily / run_weekly / run_monthly(every_bar=日频每日一次,分钟数据请求会被拒)
   g 全局命名空间 / log.info|warn|error
-  attribute_history(sec, n, '1d', ['close'])  ← 聚宽语义:【不含当日】,垫片忠实保留
-  history(n, '1d', 'close', [secs])
-  get_current_data()[sec].last_price          ← 当日收盘(与"收盘决策"口径一致)
+  attribute_history / history / get_bars —— 日频,多字段(close/open/high/low,
+      以行情数据实有列为准,缺列点名报错);聚宽语义【不含当日】忠实保留
+  get_current_data()[sec].last_price/.day_open/.paused
   order_target_value / order_target / order_value / order(按股数)
-  set_benchmark / set_option / set_order_cost / set_slippage / set_universe(记录性 no-op)
+  order_target_percent / order_percent(目标/增量仓位占比)
+  get_index_stocks / get_fundamentals / query DSL —— 需传入时点仓库 funda=(基本面家族)
+  set_benchmark / set_option / set_order_cost / set_slippage / set_universe /
+  set_subportfolios(记录性 no-op)
 
 ⚠️ 诚实边界:
   · 不支持的 API(get_price / get_fundamentals / 分钟频 / 融资融券等)一律
