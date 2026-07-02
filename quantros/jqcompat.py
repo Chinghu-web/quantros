@@ -126,8 +126,7 @@ _FUNDAMENTAL_MSG = (
 
 _UNSUPPORTED = {
     "get_price": None, "get_ticks": None, "get_trade_days": None,
-    "get_industry_stocks": None, "margincash_open": None,
-    "order_percent": None, "order_target_percent": None, "inout_cash": None,
+    "get_industry_stocks": None, "margincash_open": None, "inout_cash": None,
     "get_all_securities": None, "get_security_info": None,
     "get_fundamentals": _FUNDAMENTAL_MSG.format(name="get_fundamentals"),
     "get_index_stocks": _FUNDAMENTAL_MSG.format(name="get_index_stocks"),
@@ -164,13 +163,20 @@ class JQAdapter:
         h = self._ctx.history(sec, 1)
         return float(h[-1]) if len(h) else float("nan")
 
+    def _field_hist(self, security, count, field, drop_today=True):
+        """取某字段截至今日的历史;字段不在数据里 → 点名报可用字段。"""
+        try:
+            arr = self._ctx.history(security, int(count) + (1 if drop_today else 0), field=field)
+        except KeyError as e:
+            raise UnsupportedJQAPI(f"字段 '{field}' 不在行情数据中:{e}") from None
+        return arr[:-1] if drop_today else arr
+
     def _attribute_history(self, security, count, unit="1d", fields=("close",),
                            skip_paused=True, df=True, fq="pre"):
         if unit != "1d":
             raise UnsupportedJQAPI("垫片仅支持日频 unit='1d'")
-        arr = self._ctx.history(security, int(count) + 1)[:-1]   # 聚宽语义:不含当日
-        cols = {f: (arr if f == "close" else _unsupported(f"attribute_history field={f}")())
-                for f in (fields if isinstance(fields, (list, tuple)) else [fields])}
+        flds = fields if isinstance(fields, (list, tuple)) else [fields]
+        cols = {f: self._field_hist(security, count, f) for f in flds}   # 聚宽语义:不含当日
         if not df:
             return cols                                          # 聚宽 df=False:dict[np.ndarray]
         try:
@@ -181,9 +187,9 @@ class JQAdapter:
 
     def _history(self, count, unit="1d", field="close", security_list=None, **k):
         secs = security_list or self._ctx.symbols
-        if field != "close" or unit != "1d":
-            raise UnsupportedJQAPI("垫片 history 仅支持 field='close', unit='1d'")
-        data = {s: self._ctx.history(s, int(count) + 1)[:-1] for s in secs}
+        if unit != "1d":
+            raise UnsupportedJQAPI("垫片 history 仅支持日频 unit='1d'")
+        data = {s: self._field_hist(s, count, field) for s in secs}
         try:
             import pandas as pd
             return pd.DataFrame(data)
@@ -208,14 +214,12 @@ class JQAdapter:
         if unit != "1d":
             raise UnsupportedJQAPI("垫片 get_bars 仅支持日频 unit='1d'")
         flds = list(fields) if isinstance(fields, (list, tuple)) else [fields]
-        if flds != ["close"]:
-            raise UnsupportedJQAPI(f"垫片 get_bars 仅支持 fields=['close'],拿到 {flds}")
-        n = int(count) + (0 if include_now else 1)
-        arr = self._ctx.history(security, n)
-        if not include_now:
-            arr = arr[:-1] if len(arr) else arr
-        out = np.zeros(len(arr), dtype=[("close", float)])
-        out["close"] = arr
+        cols = {f: self._field_hist(security, count, f, drop_today=not include_now)
+                for f in flds}
+        n = min(len(v) for v in cols.values()) if cols else 0
+        out = np.zeros(n, dtype=[(f, float) for f in flds])
+        for f in flds:
+            out[f] = cols[f][-n:] if n else cols[f]
         return out
 
     @staticmethod
@@ -240,6 +244,14 @@ class JQAdapter:
         self._no_side(kw)
         self._weights[security] = (self._weights.get(security, 0.0)
                                    + float(amount) * self._px_now(security) / self._capital)
+
+    def _order_target_percent(self, security, percent, **kw):
+        self._no_side(kw)
+        self._weights[security] = float(percent)          # 目标仓位占比 = 权重,天然对齐
+
+    def _order_percent(self, security, percent, **kw):
+        self._no_side(kw)
+        self._weights[security] = self._weights.get(security, 0.0) + float(percent)
 
     def _today(self):
         d = self._ctx.date
@@ -303,6 +315,8 @@ class JQAdapter:
               "order_target": self._order_target,
               "order_value": self._order_value,
               "order": self._order,
+              "order_target_percent": self._order_target_percent,
+              "order_percent": self._order_percent,
               "run_daily": self._run_daily,
               "run_monthly": self._run_monthly,
               "run_weekly": self._run_weekly,

@@ -1,3 +1,0 @@
-polars>=1.0
-numpy>=1.24
-pytest>=7.0

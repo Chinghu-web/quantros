@@ -105,13 +105,4 @@ class CausalityTester:
         return True
 
 
-class HonestBasisStrategy(BaseStrategy):
-    def generate_signals(self, df):
-        df = df.with_columns(((pl.col("close")-pl.col("spot_close"))/pl.col("spot_close")).alias("br"))
-        df = df.with_columns(pl.col("br").rolling_mean(window_size=5).over("symbol").alias("brm"))
-        return df.with_columns((pl.col("brm").rank().over("trading_date")/pl.len().over("trading_date")).alias("weight"))
-
-class EvilPerSymbolRankStrategy(BaseStrategy):
-    def generate_signals(self, df):
-        df = df.with_columns((pl.col("close").rank().over("symbol")/pl.len().over("symbol")).alias("pr"))
-        return df.with_columns(pl.when(pl.col("pr")>0.5).then(1.0).otherwise(-1.0).alias("weight"))
+# 示例/作弊策略统一收录于 quantros/zoo.py(此处曾有重复定义,已去重)

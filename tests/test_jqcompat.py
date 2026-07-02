@@ -123,6 +123,44 @@ def test_futures_short_side_rejected(data):
         run_jq_strategy(src, data, verbose=False)
 
 
+def test_order_target_percent_supported(data):
+    """还债:order_target_percent/order_percent(聚宽高频用法)→ 权重直取,不再拒绝。"""
+    src = ("def initialize(context):\n"
+           "    run_daily(trade)\n"
+           "def trade(context):\n"
+           "    order_target_percent('IF', 0.6)\n"
+           "    order_percent('IH', 0.2)\n")
+    res = run_jq_strategy(src, data, verbose=False)
+    p = res["positions"]
+    w_if = p.filter(pl.col("symbol") == "IF")["weight"].to_numpy()
+    w_ih = p.filter(pl.col("symbol") == "IH")["weight"].to_numpy()
+    assert abs(w_if[-1] - 0.6) < 1e-9
+    assert w_ih[-1] > 0.2                      # order_percent 逐日累加(增量语义)
+
+
+def test_attribute_history_multi_field(data):
+    """还债:attribute_history/get_bars 多字段透传(high/low/open);
+    数据缺该列 → 点名报错列出可用字段,不静默。"""
+    d2 = data.with_columns([(pl.col("close") * 1.01).alias("high"),
+                            (pl.col("close") * 0.99).alias("low")])
+    src = ("import numpy as np\n"
+           "def initialize(context):\n"
+           "    run_daily(trade)\n"
+           "def trade(context):\n"
+           "    h = attribute_history('IF', 10, '1d', ['high','low','close'])\n"
+           "    if len(h['close']) < 10: return\n"
+           "    assert (np.asarray(h['high']) > np.asarray(h['low'])).all()\n"
+           "    b = get_bars('IF', 5, '1d', fields=['high','close'])\n"
+           "    assert b['high'][-1] > b['close'][-1] * 0.99\n"
+           "    order_target_value('IF', context.portfolio.total_value)\n")
+    res = run_jq_strategy(src, d2, verbose=False)
+    assert (res["positions"]["weight"].to_numpy() > 0).any()
+
+    bad = src.replace("['high','low','close']", "['volume']")
+    with pytest.raises(UnsupportedJQAPI, match="volume"):
+        run_jq_strategy(bad, d2, verbose=False)
+
+
 def test_multi_field_history(data):
     """沙箱多字段:数据含 open/high/low 时 ctx.history(field=...) 可用且时点一致。"""
     import polars as pl

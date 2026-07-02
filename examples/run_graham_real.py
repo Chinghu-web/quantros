@@ -1,9 +1,9 @@
 """
 格雷厄姆选股 @ 真实沪深300 —— 基本面家族的真实数据落地核对。
 
-运行(凭证只进你自己的终端):
-    cd ~/quantros_project
-    JQ_USER=手机号 JQ_PASS=密码 python3 run_graham_real.py
+运行(凭证只进你自己的终端;START/END 请改成你聚宽账号的实际数据权限窗口):
+    cd 项目根目录
+    JQ_USER=手机号 JQ_PASS=密码 python3 examples/run_graham_real.py
 
 首次:联网拉 时点成分股+公告日财报(约13个月度快照≈26次调用)+ 全成分价格面板,
       全部缓存 parquet;之后重跑完全离线、免凭证。
