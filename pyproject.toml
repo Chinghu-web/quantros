@@ -11,6 +11,10 @@ requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "QuantROS" }]
 keywords = ["quant", "backtest", "overfitting", "look-ahead-bias", "pbo", "strategy-validation"]
+
+[project.urls]
+Homepage = "https://github.com/Chinghu-web/quantros"
+Repository = "https://github.com/Chinghu-web/quantros"
 dependencies = [
     "polars>=1.0",
     "numpy>=1.24",
