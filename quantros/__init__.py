@@ -15,7 +15,7 @@ from quantros.universal import evaluate_returns          # 通用层正门(②�
 from quantros.sandbox import run_sandbox, run_sandbox_grid  # 时点化沙箱(①,前视物理不可能)
 from quantros.verdict import final_verdict               # 五门分级判决(证伪器出口)
 
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 
 
 def diagnose(strategy_cls, data, *, profile="default", **opts):
