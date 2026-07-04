@@ -251,3 +251,32 @@ def test_unsupported_api_raises_loudly(data):
                             'x = get_fundamentals(None)\n    hist = attribute_history(g.security, g.slow, "1d", ["close"])')
     with pytest.raises(UnsupportedJQAPI, match="get_fundamentals"):
         run_jq_strategy(bad, data, verbose=False)
+
+
+def test_pit_invariance_multi_api(data):
+    """审计补盲:PIT 自证原本只覆盖 attribute_history 一条路径。这里覆盖
+    handle_data + get_current_data(.last_price/.day_open) + order_target_percent
+    —— 这些决策 API 若有一个偷读未来,扰动后 30% 行情、前 70% 决策就会变。"""
+    src = ("def initialize(context):\n"
+           "    g.s = 'IF'\n"
+           "def handle_data(context, dat):\n"
+           "    cur = get_current_data()\n"
+           "    px = cur[g.s].last_price; op = cur[g.s].day_open\n"
+           "    h = attribute_history(g.s, 10, '1d', ['close'])\n"
+           "    if len(h['close']) < 10: return\n"
+           "    if px > h['close'].mean() and op > 0:\n"
+           "        order_target_percent(g.s, 0.8)\n"
+           "    else:\n"
+           "        order_target_percent(g.s, 0.0)\n")
+    dates = sorted(data["trading_date"].unique().to_list())
+    cut = dates[int(len(dates) * 0.7)]
+    rng = np.random.default_rng(11)
+    perturbed = data.with_columns(
+        pl.when(pl.col("trading_date") > cut)
+          .then(pl.col("close") * pl.Series("n", rng.uniform(0.2, 5.0, len(data))))
+          .otherwise(pl.col("close")).alias("close"))
+    p1 = run_jq_strategy(src, data, verbose=False)["positions"]
+    p2 = run_jq_strategy(src, perturbed, verbose=False)["positions"]
+    a = p1.filter(pl.col("trading_date") <= cut).sort(["trading_date", "symbol"])
+    b = p2.filter(pl.col("trading_date") <= cut).sort(["trading_date", "symbol"])
+    assert len(a) > 0 and a.equals(b)          # 多 API 路径同样喂不出未来
