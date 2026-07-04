@@ -30,7 +30,10 @@ QuantROS 证伪器 —— 你有什么,就走哪条路:
   ③ 只有持仓序列:
      quantros positions positions.csv prices.csv
 
-  ④ 环境自检(需联网):
+  ④ 网页版(降门槛,浏览器贴收益出初筛报告):
+     quantros web      # 然后打开 http://127.0.0.1:8000
+
+  ⑤ 环境自检(需联网):
      quantros check
 
   Python API / 手工迁移 / 期权家族:见 README.md 与 MIGRATION.md
@@ -107,6 +110,9 @@ def main(argv=None):
         from quantros.multiconfig import main as m; return m(rest)
     if cmd == "check":
         from quantros.check import main as m; return m(rest)
+    if cmd == "web":
+        from quantros.web import main as m
+        return m(port=int(rest[0]) if rest else 8000)
     print(f"未知子命令:{cmd}\n"); print(GUIDE); sys.exit(2)
 
 
