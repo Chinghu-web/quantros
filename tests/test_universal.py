@@ -16,7 +16,28 @@ def _edge_family(T=750, seed=0):
     """真实参数族:共享信号 + 质量梯度 + 小特异噪声(组合间高度相关,像真参数族)。"""
     rng = np.random.default_rng(seed)
     common = rng.normal(0, 0.01, T)
-    return {f"q{q}": 0.0012 * q + common + rng.normal(0, 0.002, T) for q in (1.0, 0.9, 0.8, 0.7)}
+    # drift 需达到"明确显著"水平(年化夏普~2.6):弱边缘 edge(如 drift=0.0012)本就
+    # 不该被 ③ 判为显著,那只是修复前 var 坍塌导致的假高 DSR。
+    return {f"q{q}": 0.0018 * q + common + rng.normal(0, 0.002, T) for q in (1.0, 0.9, 0.8, 0.7)}
+
+
+def test_pbo_ties_not_false_positive():
+    """审计修复:PBO 对并列不能把稳健参数高原判成'最过拟合'。
+    完全相同的曲线=零排名信息,PBO 应≈0(无过拟合证据),绝不能是 1.0(假证伪)。"""
+    from quantros.overfitting import pbo_cscv
+    base = np.random.default_rng(0).normal(0.0003, 0.01, 400)
+    pbo, _ = pbo_cscv(np.column_stack([base] * 5))
+    assert pbo < 0.5, f"并列冠军被误判为过拟合: PBO={pbo}"
+
+
+def test_dsr_correlated_luck_not_false_pass():
+    """审计修复:相关配置族(参数扫描常态)里样本方差会坍塌,SR0 被抹掉→DSR 假高。
+    50 条近同质的纯运气曲线(无真 edge),③ 必须不通过。"""
+    rng = np.random.default_rng(0)
+    common = rng.normal(0.0002, 0.01, 500)          # 一条'运气'曲线,均值≈0 无真 edge
+    fam = {f"c{i}": common + rng.normal(0, 0.0003, 500) for i in range(50)}
+    r = evaluate_returns(fam, verbose=False)
+    assert r["dsr"] < 0.95 and r["gate3_pass"] is False, f"相关运气族假通过: DSR={r['dsr']}"
 
 
 def test_noise_family_caught_by_both_gates():

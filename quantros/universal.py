@@ -79,8 +79,9 @@ def deflated_sharpe(returns, n_trials, sharpe_variance=None):
         return 0.0, {"sr_daily": sr, "T": T, "note": "样本太短(<30),不足以判定"}
     if n_trials < 1:
         raise ValueError("n_trials 至少为 1")
-    if sharpe_variance is None:
-        sharpe_variance = 1.0 / T          # 保守:噪声夏普估计量的理论方差 ≈ 1/T
+    # 理论下界 1/T:相关配置族(参数扫描的常态)里,各配置夏普高度相关,样本方差会
+    # 坍塌到≈0,使 SR0(N次试验期望最大夏普)被抹掉 → DSR 虚高 → 假通过。用 max 兜住。
+    sharpe_variance = 1.0 / T if sharpe_variance is None else max(sharpe_variance, 1.0 / T)
     if n_trials == 1:
         sr0 = 0.0
     else:

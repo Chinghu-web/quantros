@@ -121,7 +121,9 @@ def pbo_cscv(M, S=10):
         is_sh = np.array([_sharpe(M[is_idx, j]) for j in range(N)])
         oos_sh = np.array([_sharpe(M[oos_idx, j]) for j in range(N)])
         j = int(np.argmax(is_sh))               # 样本内冠军
-        rank = int(np.sum(oos_sh < oos_sh[j]) + 1)   # 它在样本外的排名(越高越好)
+        # 标准平均秩:处理并列(否则并列冠军被记最差名次 → 稳健参数高原假证伪)。
+        # 无并列时 sum(==)=1,退化为 sum(<)+1(与原逻辑一致,不影响正常情况)。
+        rank = np.sum(oos_sh < oos_sh[j]) + (np.sum(oos_sh == oos_sh[j]) + 1) / 2.0
         w = min(max(rank / (N + 1), 1e-6), 1 - 1e-6)
         lambdas.append(np.log(w / (1 - w)))
     lambdas = np.array(lambdas)
