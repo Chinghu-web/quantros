@@ -4,9 +4,17 @@ QuantROS 数据接入层 —— 把任意来源的行情统一成五柱引擎吃
 规范 schema(长表,按 [symbol, trading_date] 排序):
     trading_date : Date      必需
     symbol       : str        必需
-    close        : float      必需
+    close        : float      必需 —— ⚠️ 必须是【复权价】(后复权 hfq 或前复权 qfq 均可)
     adv          : float      容量柱需要(美元/元日均成交额);缺则由 volume×close 估算,再缺则容量柱 BLIND
     volume       : float      可选(用于估算 adv)
+
+⚠️⚠️ 复权红线(否则判决系统性偏低,静默出错):
+    收益率 = close 的日变化。若 close 是【未复权】价,除息日会出现向下跳空
+    (价格掉了,但那是分红不是亏损)——含分红标的(股票/红利ETF/债券ETF)的收益被
+    系统性低估,策略被冤枉。前复权与后复权算出的【日收益率一致且正确】,未复权错。
+    · 官方适配器 from_akshare / from_jq 默认取复权价,走它们即安全;
+    · 自带 CSV(load_csv)时,你必须保证 close 已复权——这是平台无法代验的数据诚实义务;
+    · 新浪源 ak.fund_etf_hist_sina / ak.stock_zh_a_daily(adjust="") 是【未复权】,勿直接用。
 
 任何来源(CSV / akshare / tushare / 自有库)只要落到这个 schema,五柱与中档都能直接跑。
 """
@@ -80,6 +88,7 @@ def from_jq(securities, start, end, adv_window: int = 20, refresh: bool = False)
     jq.auth(str(user), str(pwd))
     pdf = jq.get_price(securities, start_date=str(start), end_date=str(end),
                        frequency="daily", fields=["close", "money"],
+                       fq="post",                 # ⚠️ 后复权:含分红,收益率正确(默认 pre 也对,显式化)
                        skip_paused=True, panel=False)
     df = (pl.from_pandas(pdf.reset_index() if "code" not in pdf.columns else pdf)
           .rename({"time": "trading_date", "code": "symbol"})
@@ -114,6 +123,53 @@ def from_akshare(symbols=None, start=None, end=None) -> pl.DataFrame:
     if start: df = df.filter(pl.col("trading_date") >= pl.lit(start).cast(pl.Date))
     if end:   df = df.filter(pl.col("trading_date") <= pl.lit(end).cast(pl.Date))
     return ensure_adv(validate(df))
+
+
+def from_akshare_stock(codes, start=None, end=None, adjust="hfq") -> pl.DataFrame:
+    """用 akshare 拉【股票】日线 → 规范 schema。默认后复权(hfq),分红拆分已还原。
+    codes 用 6 位代码(如 '000001' 平安银行)或带交易所('000001.XSHE' 会自动取 6 位)。
+    ⚠️ adjust 不可传 ""(未复权)——那会丢失分红收益、系统性低估。"""
+    if adjust not in ("hfq", "qfq"):
+        raise ValueError("adjust 必须是 'hfq'(后复权,推荐)或 'qfq'(前复权);"
+                         "回测严禁用未复权价——分红收益会被丢掉")
+    import akshare as ak
+    frames = []
+    for c in codes:
+        six = str(c).split(".")[0][-6:]
+        raw = ak.stock_zh_a_hist(symbol=six, period="daily", adjust=adjust,
+                                 start_date=(start or "19900101").replace("-", ""),
+                                 end_date=(end or "20991231").replace("-", ""))
+        d = (pl.from_pandas(raw).rename({"日期": "trading_date", "收盘": "close",
+                                         "成交额": "money"})
+             .with_columns([pl.col("trading_date").cast(pl.Date), pl.lit(str(c)).alias("symbol"),
+                            pl.col("close").cast(pl.Float64), pl.col("money").cast(pl.Float64)]))
+        frames.append(d.select(["trading_date", "symbol", "close", "money"]))
+    df = validate(pl.concat(frames))
+    return (df.with_columns(pl.col("money").rolling_mean(20, min_samples=1).over("symbol").alias("adv"))
+              .drop("money"))
+
+
+def from_akshare_etf(codes, start=None, end=None, adjust="hfq") -> pl.DataFrame:
+    """用 akshare 拉【ETF】日线 → 规范 schema。默认后复权(hfq)。
+    ⚠️ 红利/债券类 ETF 分红多,未复权会严重低估——务必复权。不可用 fund_etf_hist_sina(未复权)。"""
+    if adjust not in ("hfq", "qfq"):
+        raise ValueError("adjust 必须是 'hfq' 或 'qfq';ETF 回测严禁未复权(红利/债券ETF 分红多)")
+    import akshare as ak
+    frames = []
+    for c in codes:
+        six = str(c).split(".")[0][-6:]
+        raw = ak.fund_etf_hist_em(symbol=six, period="daily", adjust=adjust,
+                                  start_date=(start or "19900101").replace("-", ""),
+                                  end_date=(end or "20991231").replace("-", ""))
+        d = (pl.from_pandas(raw).rename({"日期": "trading_date", "收盘": "close",
+                                         "开盘": "open", "最高": "high", "最低": "low",
+                                         "成交额": "money"})
+             .with_columns([pl.col("trading_date").cast(pl.Date), pl.lit(str(c)).alias("symbol")]
+                           + [pl.col(x).cast(pl.Float64) for x in ("close", "open", "high", "low", "money")]))
+        frames.append(d.select(["trading_date", "symbol", "close", "open", "high", "low", "money"]))
+    df = validate(pl.concat(frames))
+    return (df.with_columns(pl.col("money").rolling_mean(20, min_samples=1).over("symbol").alias("adv"))
+              .drop("money"))
 
 
 def from_tushare(ts_codes, start, end, token=None) -> pl.DataFrame:

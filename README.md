@@ -166,7 +166,8 @@ quantros.diagnose_outputs(positions, prices, report_sink=HTTPSink(url, api_key))
 
 **平台基础设施**
 - `quantros/__init__.py` — 顶层入口 `diagnose()`(完整模式) / `diagnose_outputs()`(中档)
-- `quantros/data.py` — 数据接入层:规范 schema + CSV 加载 + akshare/tushare 适配器(可选依赖);**`from_jq()` 聚宽通用行情**(股票/ETF/指数日线,凭证只进终端,本地 parquet 缓存额度只花一次,成交额直接作 adv);`tests/test_data.py` `tests/test_from_jq.py`
+- `quantros/data.py` — 数据接入层:规范 schema + CSV 加载 + akshare/tushare 适配器(可选依赖);**`from_jq()` 聚宽通用行情**(股票/ETF/指数日线,凭证只进终端,本地 parquet 缓存额度只花一次,成交额直接作 adv);**`from_akshare_stock/etf()` 默认后复权(hfq)** —— 官方取数入口保证复权;`tests/test_data.py` `tests/test_from_jq.py`
+- ⚠️ **复权红线(数据诚实义务)**:`close` 必须是【复权价】。未复权价在除息日向下跳空,含分红标的(股票/红利ETF/债券ETF)收益被系统性低估、策略被冤枉、判决静默偏低。官方适配器默认复权;自带 CSV 时须自行保证已复权,平台无法代验(新浪源 `fund_etf_hist_sina`/`stock_zh_a_daily(adjust="")` 是未复权,勿直接用)。有测试 `test_unadjusted_data_understates_returns` 固化此教训。
 - `quantros/htmlreport.py` — HTML 体检报告:单文件自包含,逐门着色,免责与"未评估≠通过"固定出现不可删;`quantros-gate --html` / jq_bridge 自动产出;`tests/test_htmlreport.py`
 - `quantros/sync.py` — 云端接缝:JSONFileSink / HTTPSink / License(API key + 离线宽限),传输层依赖注入可测;**只送判决不送 IP** 有断言为证;`tests/test_sync.py`
 - `quantros/profiles.py` — 品种参数档:`cn_index_futures`(成本 3bp,非股票的 10bp)等;阈值显式化、可被 opts 覆盖;`tests/test_profiles.py`
