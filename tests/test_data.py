@@ -63,7 +63,9 @@ def _fake_akshare(monkeypatch, capture):
     import pandas as pd
     fake = types.ModuleType("akshare")
     def _hist(symbol, period, adjust, start_date, end_date, **k):
+        import os
         capture["adjust"] = adjust; capture["symbol"] = symbol
+        capture["no_proxy_at_call"] = os.environ.get("no_proxy")   # 请求时应已绕过代理
         return pd.DataFrame({"日期": ["2020-01-02", "2020-01-03"], "收盘": [10.0, 10.1],
                              "开盘": [9.9, 10.0], "最高": [10.2, 10.2], "最低": [9.8, 10.0],
                              "成交额": [1e8, 1e8]})
@@ -78,6 +80,7 @@ def test_from_akshare_etf_defaults_hfq(monkeypatch):
     _fake_akshare(monkeypatch, cap)
     df = from_akshare_etf(["510880.XSHG"])
     assert cap["adjust"] == "hfq"                  # 默认后复权
+    assert cap["no_proxy_at_call"] == "*"          # 国内源请求时已绕过翻墙代理
     assert set(["trading_date", "symbol", "close", "adv"]).issubset(df.columns)
     with pytest.raises(ValueError, match="复权"):
         from_akshare_etf(["510880"], adjust="")   # 未复权被拒

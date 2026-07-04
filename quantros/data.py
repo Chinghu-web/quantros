@@ -18,9 +18,28 @@ QuantROS 数据接入层 —— 把任意来源的行情统一成五柱引擎吃
 
 任何来源(CSV / akshare / tushare / 自有库)只要落到这个 schema,五柱与中档都能直接跑。
 """
+import contextlib
+import os
 from pathlib import Path
 
 import polars as pl
+
+
+@contextlib.contextmanager
+def _direct_cn():
+    """国内数据源(东财/新浪)不该走翻墙代理:临时让 requests 直连(no_proxy='*')。
+    ⚠️ 仅对 HTTP(S) 代理有效;系统级 TUN/全局 VPN(网络层劫持)绕不过——那种需在
+    VPN 客户端里切'规则模式'(国内直连)。不影响调用方其他请求(退出即恢复)。"""
+    saved = {k: os.environ.get(k) for k in ("no_proxy", "NO_PROXY")}
+    os.environ["no_proxy"] = os.environ["NO_PROXY"] = "*"
+    try:
+        yield
+    finally:
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
 
 REQUIRED = ["trading_date", "symbol", "close"]
 JQ_CACHE_DIR = Path(__file__).resolve().parent.parent / "data_cache"
@@ -136,9 +155,10 @@ def from_akshare_stock(codes, start=None, end=None, adjust="hfq") -> pl.DataFram
     frames = []
     for c in codes:
         six = str(c).split(".")[0][-6:]
-        raw = ak.stock_zh_a_hist(symbol=six, period="daily", adjust=adjust,
-                                 start_date=(start or "19900101").replace("-", ""),
-                                 end_date=(end or "20991231").replace("-", ""))
+        with _direct_cn():                        # 国内源绕过翻墙代理
+            raw = ak.stock_zh_a_hist(symbol=six, period="daily", adjust=adjust,
+                                     start_date=(start or "19900101").replace("-", ""),
+                                     end_date=(end or "20991231").replace("-", ""))
         d = (pl.from_pandas(raw).rename({"日期": "trading_date", "收盘": "close",
                                          "成交额": "money"})
              .with_columns([pl.col("trading_date").cast(pl.Date), pl.lit(str(c)).alias("symbol"),
@@ -158,9 +178,10 @@ def from_akshare_etf(codes, start=None, end=None, adjust="hfq") -> pl.DataFrame:
     frames = []
     for c in codes:
         six = str(c).split(".")[0][-6:]
-        raw = ak.fund_etf_hist_em(symbol=six, period="daily", adjust=adjust,
-                                  start_date=(start or "19900101").replace("-", ""),
-                                  end_date=(end or "20991231").replace("-", ""))
+        with _direct_cn():                        # 国内源绕过翻墙代理
+            raw = ak.fund_etf_hist_em(symbol=six, period="daily", adjust=adjust,
+                                      start_date=(start or "19900101").replace("-", ""),
+                                      end_date=(end or "20991231").replace("-", ""))
         d = (pl.from_pandas(raw).rename({"日期": "trading_date", "收盘": "close",
                                          "开盘": "open", "最高": "high", "最低": "low",
                                          "成交额": "money"})
