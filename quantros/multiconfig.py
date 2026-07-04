@@ -33,8 +33,11 @@ def _align_weights(positions, prices) -> np.ndarray:
     """把 (trading_date, symbol, weight) 持仓按 prices 的 [symbol,trading_date] 排序对齐成数组。
     与成本/容量探针内部的排序一致,保证 _FrozenStrategy 喂出的权重对得上行。"""
     j = (prices.sort(["symbol", "trading_date"])
-               .join(positions, on=["trading_date", "symbol"], how="left"))
-    return j["weight"].to_numpy()
+               .join(positions.unique(subset=["trading_date", "symbol"], keep="first"),
+                     on=["trading_date", "symbol"], how="left"))
+    # 缺仓日(持仓文件只记非零仓位是常见写法)填 0=空仓,不能留 null(会传成 NaN、
+    # 让整行被静默丢弃 → 样本缩短、换手高估、判决偏差)。与 sandbox 口径一致。
+    return j["weight"].fill_null(0.0).to_numpy()
 
 
 def build_return_matrix(positions_by_config, prices):

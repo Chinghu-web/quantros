@@ -62,3 +62,23 @@ def test_capacity_INF_for_no_trading(liquid):
     constrained, cap = capacity_probe(NeverTradesStrategy(), liquid, verbose=False)
     assert cap == float("inf")
     assert constrained is False
+
+
+def test_capacity_bad_adv_not_false_pass():
+    """审计修复F8:adv 含 0/NaN 时不能静默假通过/假证伪,应判 N/A(未评估)。"""
+    import numpy as np, datetime, polars as pl
+    from quantros.capacity import capacity_probe
+    d0 = datetime.date(2025, 1, 1); rng = np.random.default_rng(0)
+    rows = []
+    for i in range(150):
+        for s, adv in [("A", 1e9), ("B", 0.0)]:   # B 的 adv=0(坏)
+            rows.append({"trading_date": d0 + datetime.timedelta(days=i), "symbol": s,
+                         "close": 100 + rng.normal(0, 1), "adv": adv})
+    data = pl.DataFrame(rows).with_columns(pl.col("trading_date").cast(pl.Date))
+    class AllLong:
+        def generate_signals(self, d):
+            return d.with_columns(pl.lit(1.0).alias("weight"))
+    constrained, cap = capacity_probe(AllLong(), data, verbose=False)
+    assert constrained is None or constrained is True   # 绝不能是 False(假通过)
+    if constrained is None:
+        assert cap != cap                                # N/A → nan

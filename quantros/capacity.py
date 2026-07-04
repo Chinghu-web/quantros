@@ -60,7 +60,7 @@ def _daily_gross_and_impact_base(strategy, df):
               .agg([pl.col("_g").mean().alias("g"), pl.col("_s").sum().alias("s")])
               .sort("trading_date"))
     g = agg["g"].to_numpy(); s = agg["s"].to_numpy()
-    good = ~np.isnan(g)
+    good = np.isfinite(g) & np.isfinite(s)     # adv=0→inf、adv=NaN→NaN 的行一并剔除
     return g[good], s[good]
 
 
@@ -81,6 +81,10 @@ def capacity_probe(strategy, df, k=0.01, target_aum=1e8, verbose=True):
     """
     g, s = _daily_gross_and_impact_base(strategy, df)
     n = df["symbol"].n_unique()
+    if len(g) == 0 or not (np.isfinite(g.mean()) and np.isfinite(s.mean())):
+        if verbose:
+            print(" [D1 容量] ⚪ N/A(数据无效:adv 缺失/非正,容量无法评估——未评估 ≠ 通过)")
+        return None, float("nan")              # 数据坏 → 未评估,绝不静默假通过/假证伪
     gross_mean, s_mean = g.mean(), s.mean()
     if s_mean <= 1e-18:
         capacity, constrained = float("inf"), False        # 不交易 → 无冲击约束

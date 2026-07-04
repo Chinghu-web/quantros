@@ -64,3 +64,30 @@ def test_requires_two_configs():
     prices = df.select(["trading_date", "symbol", "close"])
     with pytest.raises(ValueError):
         diagnose_multiconfig({"only": _positions(RobustMomentumStrategy(5), df)}, prices, verbose=False)
+
+
+def test_sparse_positions_filled_zero_not_dropped():
+    """审计修复F1:持仓文件只记非零仓位(缺仓日不写行)是常见写法。
+    缺仓日必须填0=空仓,不能留null→NaN→整行被静默丢弃(样本缩短、换手高估)。"""
+    df = generate_data_with_edge(beta=0.3)
+    prices = df.select(["trading_date", "symbol", "close"])
+    full = prices.select(["trading_date", "symbol"]).with_columns(pl.lit(1.0).alias("weight"))
+    # c2: symbol 之一只在前半段有持仓行(后半段缺行=空仓)
+    sym0 = df["symbol"].unique().to_list()[0]
+    mid = sorted(df["trading_date"].unique().to_list())[len(df["trading_date"].unique())//2]
+    sparse = full.filter(~((pl.col("symbol") == sym0) & (pl.col("trading_date") > mid)))
+    from quantros.multiconfig import build_return_matrix
+    M, dates, names = build_return_matrix({"full": full, "sparse": sparse}, prices)
+    # 缺仓填0后,两配置的收益矩阵行数应=价格的完整交易日数(未被静默删)
+    assert M.shape[0] == df["trading_date"].n_unique() - 1   # 末日无远期收益
+
+
+def test_duplicate_position_rows_deduped():
+    """审计修复F2:持仓表含重复(date,symbol)行,不能让 join 膨胀错位。"""
+    df = generate_data_with_edge(beta=0.3)
+    prices = df.select(["trading_date", "symbol", "close"])
+    pos = prices.select(["trading_date", "symbol"]).with_columns(pl.lit(1.0).alias("weight"))
+    pos_dup = pl.concat([pos, pos.head(3)])       # 人为重复前3行
+    from quantros.multiconfig import _align_weights
+    w = _align_weights(pos_dup, prices)
+    assert len(w) == len(prices)                  # 长度不被重复行撑大

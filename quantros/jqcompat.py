@@ -279,12 +279,25 @@ class JQAdapter:
         return q._execute(self._funda.asof(self._clamp_pit_date(date)))
 
     def _run_monthly(self, func, monthday=1, *a, **kw):
-        """聚宽 run_monthly:每月 monthday 号(或其后的第一个交易日)运行一次。"""
-        self._monthly.append({"func": func, "monthday": int(monthday), "last": None})
+        """聚宽 run_monthly:每月第 monthday 个【交易日】运行一次(不是日历日号)。
+        ⚠️ 负数(月末/倒数第N)暂不支持——时点回放判'月末'需未来交易日历,静默近似会
+        让'月末调仓'变成'月初调仓'(持仓序列全错),故直接拒绝。monthday 超过某月交易日
+        总数时该月不触发(边界,罕见输入)。"""
+        if int(monthday) < 0:
+            raise UnsupportedJQAPI(
+                "run_monthly monthday<0(月末/倒数第N交易日调仓)暂不支持:时点回放判定'月末'"
+                "需未来交易日历,静默近似会把月末调仓错成月初。请改用正数(每月第N个交易日),"
+                "或在函数内自行判断。")
+        self._monthly.append({"func": func, "monthday": int(monthday), "period": None, "count": 0})
 
     def _run_weekly(self, func, weekday=1, *a, **kw):
-        """聚宽 run_weekly:每周第 weekday 个交易日(周一=1;节假日顺延)运行一次。"""
-        self._weekly.append({"func": func, "weekday": int(weekday), "last": None})
+        """聚宽 run_weekly:每周第 weekday 个【交易日】运行一次(1=本周第一个交易日)。
+        ⚠️ 负数(周末/倒数)同理拒绝。"""
+        if int(weekday) < 0:
+            raise UnsupportedJQAPI(
+                "run_weekly weekday<0(周末/倒数调仓)暂不支持:判定'本周最后交易日'需未来日历。"
+                "请改用正数(每周第N个交易日)。")
+        self._weekly.append({"func": func, "weekday": int(weekday), "period": None, "count": 0})
 
     def _run_daily(self, func, *a, **kw):
         t = kw.get("time", a[0] if a else None)
@@ -366,14 +379,19 @@ class JQAdapter:
         for func in self._scheduled:
             func(self._jqctx)
         d = self._jqctx.current_dt.date()
-        for m in self._monthly:                       # 每月 monthday 号或其后首个交易日
-            if d.day >= m["monthday"] and m["last"] != (d.year, d.month):
-                m["last"] = (d.year, d.month)
+        ym = (d.year, d.month)                        # 按交易日序号计数(时点安全:只数已见交易日)
+        for m in self._monthly:
+            if m["period"] != ym:
+                m["period"] = ym; m["count"] = 0
+            m["count"] += 1
+            if m["count"] == m["monthday"]:           # 本月第 monthday 个交易日
                 m["func"](self._jqctx)
-        for wk in self._weekly:                       # 每周第 weekday 个交易日(节假日顺延)
-            iso = d.isocalendar()
-            if d.isoweekday() >= wk["weekday"] and wk["last"] != (iso[0], iso[1]):
-                wk["last"] = (iso[0], iso[1])
+        iso = d.isocalendar(); wk_key = (iso[0], iso[1])
+        for wk in self._weekly:
+            if wk["period"] != wk_key:
+                wk["period"] = wk_key; wk["count"] = 0
+            wk["count"] += 1
+            if wk["count"] == wk["weekday"]:          # 本周第 weekday 个交易日
                 wk["func"](self._jqctx)
         if "handle_data" in self._ns:
             self._ns["handle_data"](self._jqctx, self._get_current_data())

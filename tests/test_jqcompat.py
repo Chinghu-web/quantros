@@ -181,7 +181,7 @@ def test_fundamentals_rejected_with_survivorship_education(data):
     """基本面选股(格雷厄姆式官方模板画像):get_index_stocks/get_fundamentals
     必须拒绝且报错里讲清【为什么】——幸存者偏差 + 财报公告日前视。"""
     src = ("def initialize(context):\n"
-           "    run_monthly(trade, monthday=20)\n"
+           "    run_monthly(trade, monthday=1)\n"
            "def trade(context):\n"
            "    stocks = get_index_stocks('000300.XSHG')\n")
     with pytest.raises(UnsupportedJQAPI, match="幸存者偏差"):
@@ -193,7 +193,7 @@ def test_run_monthly_fires_once_per_month(data):
     src = ("def initialize(context):\n"
            "    g.cnt = 0\n"
            "    g.months = set()\n"
-           "    run_monthly(rebalance, monthday=20)\n"
+           "    run_monthly(rebalance, monthday=1)\n"
            "def rebalance(context):\n"
            "    g.cnt += 1\n"
            "    key = (context.current_dt.year, context.current_dt.month)\n"
@@ -204,6 +204,17 @@ def test_run_monthly_fires_once_per_month(data):
     w = res["positions"].filter(pl.col("symbol") == "IF")["weight"].to_numpy()
     assert (w > 0).any()                       # 确实买了(cash 别名工作)
     assert w.max() <= 1.0 + 1e-9               # 无杠杆
+
+
+def test_negative_monthday_rejected(data):
+    """审计修复:负 monthday(月末/倒数调仓,聚宽常用)不能静默变月初——必须点名拒绝。
+    (原实现 d.day>=-1 恒真 → 每月初触发,持仓序列全错却不报错。)"""
+    src = ("def initialize(context):\n"
+           "    run_monthly(rb, monthday=-1)\n"     # -1 = 聚宽的"每月最后一个交易日"
+           "def rb(context):\n"
+           "    order_target_value('IF', context.portfolio.total_value)\n")
+    with pytest.raises(UnsupportedJQAPI, match="月末"):
+        run_jq_strategy(src, data, verbose=False)
 
 
 def test_run_weekly_fires_once_per_week(data):
