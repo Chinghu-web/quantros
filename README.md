@@ -9,8 +9,14 @@
 
 ```bash
 pip install quantros          # 装(Python 3.9+)
-quantros                      # 看漏斗指南:你有什么,就走哪条路
+quantros web                  # ★ 最快:浏览器开 http://127.0.0.1:8000,贴收益出初筛报告(免命令行)
+quantros                      # 或看命令行漏斗指南:你有什么,就走哪条路
 ```
+
+**三种用法,一句话选:**
+- 🌐 **网页版** `quantros web` —— 浏览器贴收益,零命令行,出 ②③ 初筛(最低门槛)
+- 💻 **聚宽策略** `quantros jq 策略.py ...` —— 零改写过五门(见下)
+- 📄 **任何框架** `quantros gate returns.csv` —— 导出收益 CSV 出初筛
 
 **聚宽用户**(策略文件一行不用改):
 ```bash
@@ -172,6 +178,10 @@ quantros.diagnose_outputs(positions, prices, report_sink=HTTPSink(url, api_key))
 - `quantros/sync.py` — 云端接缝:JSONFileSink / HTTPSink / License(API key + 离线宽限),传输层依赖注入可测;**只送判决不送 IP** 有断言为证;`tests/test_sync.py`
 - `quantros/profiles.py` — 品种参数档:`cn_index_futures`(成本 3bp,非股票的 10bp)等;阈值显式化、可被 opts 覆盖;`tests/test_profiles.py`
 - `quantros/check.py` — 真实数据端到端核对(`quantros-check`):证明因果柱在真实数据上仍能抓泄漏
+- `quantros/web.py` — 网页版通用层 gate(`quantros web`):浏览器贴收益 CSV 出 ②③ 初筛报告,零 web 框架依赖(标准库);诚实义务/免责页面固定印出;`tests/test_web.py`
+- `quantros/cli.py` — 统一入口 `quantros`(web / jq / gate / positions / check);契约写错给带示例的中文报错
+
+> 🔍 **经多维独立审计**:核心统计(PBO/DSR)、前视泄漏、记账、移植保真度四个维度分头审查并修复(见提交历史);前视泄漏审计确认"物理喂不出未来"在当前代码路径上成立。136 测试。
 - `pyproject.toml` — `pip install -e .`;命令行入口 `quantros-check` / `quantros-multiconfig`
 
 ## 🛡️ 诚实的边界清单（Causality Frontier）
